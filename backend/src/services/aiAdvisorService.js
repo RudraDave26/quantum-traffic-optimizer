@@ -17,7 +17,7 @@ export const aiAdvisorService = {
    */
   getApiKeys() {
     const raw = process.env.GROQ_API_KEYS || 
-      `${process.env.GROQ_API_KEY || ''},${process.env.GROQ_API_KEY_BACKUP || ''},${process.env.GROQ_API_KEY_TERTIARY || ''}`;
+      `${process.env.GROQ_API_KEY || ''},${process.env.GROQ_API_KEY_BACKUP || ''},${process.env.GROQ_API_KEY_TERTIARY || ''},${process.env.GROQ_API_KEY_QUATERNARY || ''}`;
     
     // Deduplicate and filter empty
     const uniqueKeys = Array.from(
