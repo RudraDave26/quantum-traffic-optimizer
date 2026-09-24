@@ -1,0 +1,54 @@
+# ==============================================================================
+# Q-ROUTE: Git Ignore Configuration
+# Prevents accidental commits of secrets, dependencies, logs, and build artifacts
+# ==============================================================================
+
+# 1. Environment Variables & Secret API Keys (CRITICAL - DO NOT COMMIT)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+!.env.example
+
+# 2. Node Dependencies
+node_modules/
+*/node_modules/
+package-lock.json.bak
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 3. Build Outputs & Distribution
+dist/
+*/dist/
+build/
+*/build/
+
+# 4. Local Database & SQLite Data
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# 5. External Tool Binaries (e.g. Cloudflare tunnel executable)
+tools/
+*.exe
+
+# 6. Operating System & Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 7. Runtime Logs & Diagnostics
+logs/
+*.log
+scratch/
