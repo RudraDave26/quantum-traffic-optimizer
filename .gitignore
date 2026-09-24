@@ -27,7 +27,9 @@ build/
 */build/
 
 # 4. Local Database & SQLite Data
-data/
+/data/
+backend/data/
+!frontend/src/data/
 *.sqlite
 *.sqlite3
 *.db
