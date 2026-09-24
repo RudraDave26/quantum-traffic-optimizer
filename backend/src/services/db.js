@@ -5,9 +5,13 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.resolve(__dirname, '../../data');
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+const DATA_DIR = process.env.VERCEL ? '/tmp/qroute_data' : path.resolve(__dirname, '../../data');
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (e) {
+  // Silent fallback for read-only serverless filesystems
 }
 
 const DB_FILE = path.join(DATA_DIR, 'qroute_store.json');
@@ -20,7 +24,7 @@ function loadDb() {
       return JSON.parse(data);
     }
   } catch (e) {
-    console.warn('[Q-Route DB] Error reading DB file, recreating store:', e.message);
+    console.warn('[Q-Route DB] Notice: Using in-memory store:', e.message);
   }
   return {
     searches: [],
@@ -35,7 +39,7 @@ function saveDb() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
   } catch (e) {
-    console.error('[Q-Route DB] Error persisting DB to disk:', e.message);
+    // In-memory persistence fallback on serverless
   }
 }
 

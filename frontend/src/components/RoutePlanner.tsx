@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { VehicleType, RoutingMode, CorridorPreset } from '../types';
 import { ALL_INDIAN_STATES, CITIES_BY_STATE, ALL_INDIAN_CITIES_FLAT } from '../data/allIndiaCitiesData';
+import { groqAiService } from '../services/groqAiService';
 
 interface RoutePlannerProps {
   origin: string;
@@ -87,10 +88,65 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const [showOriginDropdown, setShowOriginDropdown] = useState<boolean>(false);
   const [showDestDropdown, setShowDestDropdown] = useState<boolean>(false);
 
+  // AI Journey Auto-Setup via Groq state
+  const [aiPromptText, setAiPromptText] = useState<string>('');
+  const [isAiParsing, setIsAiParsing] = useState<boolean>(false);
+  const [aiSetupMessage, setAiSetupMessage] = useState<string>('');
+
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
   const originDropdownRef = useRef<HTMLDivElement>(null);
   const destDropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleAiAutoSetup = async () => {
+    if (!aiPromptText.trim() || isAiParsing) return;
+    setIsAiParsing(true);
+    setAiSetupMessage('');
+
+    try {
+      const result = await groqAiService.parseNaturalRouteQuery(aiPromptText);
+      if (result.originCity) {
+        const foundOrigin = ALL_INDIAN_CITIES_FLAT.find(c => c.name.toLowerCase() === result.originCity!.toLowerCase()) ||
+          ALL_INDIAN_CITIES_FLAT.find(c => c.name.toLowerCase().includes(result.originCity!.toLowerCase()));
+        if (foundOrigin) {
+          setOrigin(foundOrigin.name);
+          setOriginCoord({ name: foundOrigin.name, lat: foundOrigin.lat, lng: foundOrigin.lng });
+          setOriginState(foundOrigin.state);
+        } else {
+          setOrigin(result.originCity);
+          if (result.originState) setOriginState(result.originState);
+        }
+      }
+
+      if (result.destCity) {
+        const foundDest = ALL_INDIAN_CITIES_FLAT.find(c => c.name.toLowerCase() === result.destCity!.toLowerCase()) ||
+          ALL_INDIAN_CITIES_FLAT.find(c => c.name.toLowerCase().includes(result.destCity!.toLowerCase()));
+        if (foundDest) {
+          setDestination(foundDest.name);
+          setDestCoord({ name: foundDest.name, lat: foundDest.lat, lng: foundDest.lng });
+          setDestState(foundDest.state);
+        } else {
+          setDestination(result.destCity);
+          if (result.destState) setDestState(result.destState);
+        }
+      }
+
+      if (result.vehicleType) setVehicleType(result.vehicleType);
+      if (result.routingMode) setRoutingMode(result.routingMode);
+
+      setAiSetupMessage(result.explanation || `Configured ${result.originCity || origin} ➔ ${result.destCity || destination}`);
+      setTimeout(() => setAiSetupMessage(''), 8000);
+
+      setTimeout(() => {
+        onOptimize();
+      }, 100);
+    } catch (err: any) {
+      console.warn('AI setup error:', err);
+      setAiSetupMessage('Could not parse route automatically, please pick from dropdowns.');
+    } finally {
+      setIsAiParsing(false);
+    }
+  };
 
   // Sync state dropdown when origin/destination props change (e.g. from preset or initial load)
   useEffect(() => {
@@ -252,6 +308,54 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           <Globe2 className="w-3 h-3 text-emerald-600" />
           <span>500+ Indian Cities</span>
         </span>
+      </div>
+
+      {/* AI Smart Journey Auto-Setup via Groq LPU */}
+      <div className="p-3.5 mb-3.5 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-slate-50 border border-blue-200/80 shadow-soft-sm">
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-[10.5px] font-bold text-qnavy uppercase tracking-wider flex items-center space-x-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-qblue animate-pulse" />
+            <span>AI Smart Journey Setup (Groq Cloud LPU)</span>
+          </label>
+          <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 flex items-center space-x-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+            <span>Groq LPU AI Active</span>
+          </span>
+        </div>
+        <p className="text-[10.5px] text-text-muted mb-2">
+          Type any natural journey prompt to automatically configure <strong>ORIGIN: State & City</strong> and <strong>DESTINATION: State & City</strong>:
+        </p>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={aiPromptText}
+            onChange={e => setAiPromptText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleAiAutoSetup();
+            }}
+            placeholder="e.g. 'Route from Jaipur Rajasthan to Mumbai Maharashtra' or 'Delhi to Ahmedabad in EV'"
+            className="flex-1 text-xs py-2 px-3 bg-white border border-slate-200 hover:border-slate-300 focus:border-qblue rounded-xl focus:outline-none focus:ring-2 focus:ring-qblue/20 placeholder:text-slate-400 shadow-soft-sm transition-smooth font-medium text-text-main"
+          />
+          <button
+            type="button"
+            onClick={handleAiAutoSetup}
+            disabled={isAiParsing || !aiPromptText.trim()}
+            className="px-3.5 py-2 bg-qblue hover:bg-qnavy text-white text-xs font-semibold rounded-xl transition-smooth shadow-soft-sm flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer shrink-0"
+          >
+            {isAiParsing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5" />
+            )}
+            <span>{isAiParsing ? 'Analyzing...' : 'AI Auto-Set'}</span>
+          </button>
+        </div>
+        {aiSetupMessage && (
+          <p className="text-[11px] text-emerald-800 font-semibold mt-2 px-2.5 py-1 bg-emerald-50 rounded-lg border border-emerald-200 flex items-center space-x-1.5">
+            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span>{aiSetupMessage}</span>
+          </p>
+        )}
       </div>
 
       {/* ORIGIN: State & City */}

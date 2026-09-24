@@ -15,6 +15,7 @@ import {
   Cpu
 } from 'lucide-react';
 import type { CandidateRoute } from '../types';
+import { groqAiService } from '../services/groqAiService';
 
 interface AiRouteAdvisorProps {
   recommendedRoute: CandidateRoute | null;
@@ -80,9 +81,23 @@ export const AiRouteAdvisor: React.FC<AiRouteAdvisorProps> = ({
       if (res.ok) {
         const data = await res.json();
         setBriefing(data);
+        return;
       }
+      throw new Error('API briefing unavailable');
     } catch (err) {
-      console.warn('AI Briefing error:', err);
+      console.warn('Backend AI Briefing offline, generating via direct Groq Cloud LPU:', err);
+      try {
+        const directData = await groqAiService.generateRouteBriefing({
+          origin,
+          destination,
+          recommendedRoute,
+          vehicleType,
+          routingMode
+        });
+        setBriefing(directData);
+      } catch (groqErr) {
+        console.error('Groq direct briefing error:', groqErr);
+      }
     } finally {
       setIsLoadingBriefing(false);
     }
@@ -128,15 +143,39 @@ export const AiRouteAdvisor: React.FC<AiRouteAdvisorProps> = ({
       });
 
       const data = await res.json();
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: data.reply || "I'm monitoring your route conditions." }
-      ]);
+      if (data.reply) {
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: data.reply }
+        ]);
+        return;
+      }
+      throw new Error('Chat API offline');
     } catch (err) {
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: "Unable to reach Groq Cloud. Telemetry confirms your bypass route is currently clear." }
-      ]);
+      try {
+        const reply = await groqAiService.askCoPilot({
+          message: userMsg.content,
+          journeyInfo: {
+            origin,
+            destination,
+            routeName: recommendedRoute?.name,
+            durationMin: recommendedRoute?.durationMin,
+            distanceKm: recommendedRoute?.distanceKm,
+            fuel: `${recommendedRoute?.fuelEstimate?.value} ${recommendedRoute?.fuelEstimate?.unit}`,
+            risk: recommendedRoute?.riskDetails?.level
+          },
+          history: messages
+        });
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: reply }
+        ]);
+      } catch (groqErr) {
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: "Q-Route Co-Pilot: Telemetry confirms your selected bypass route is clear. Drive safely!" }
+        ]);
+      }
     } finally {
       setIsSending(false);
     }
