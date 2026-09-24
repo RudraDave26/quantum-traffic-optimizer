@@ -13,6 +13,8 @@ import { RouteHistoryPage } from './components/RouteHistoryPage';
 import { DataSourcesPage } from './components/DataSourcesPage';
 import { MethodologyPage } from './components/MethodologyPage';
 import { SystemStatusModal } from './components/SystemStatusModal';
+import { generateClientRoutes } from './services/clientRouteOptimizer';
+import { POPULAR_INDIAN_CORRIDORS } from './data/allIndiaCitiesData';
 import type { 
   CandidateRoute, 
   VehicleType, 
@@ -41,7 +43,7 @@ export const App: React.FC = () => {
   // System & Traffic telemetry states
   const [trafficStatus, setTrafficStatus] = useState<TrafficStatus | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
-  const [presets, setPresets] = useState<CorridorPreset[]>([]);
+  const [presets, setPresets] = useState<CorridorPreset[]>(POPULAR_INDIAN_CORRIDORS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>('jaipur-ajmer');
 
   // Route Planning inputs
@@ -162,31 +164,58 @@ export const App: React.FC = () => {
         })
       });
 
-      if (!res.ok) throw new Error('Optimization request failed');
+      if (!res.ok) throw new Error(`Optimization request failed with status: ${res.status}`);
 
       const data = await res.json();
-      if (data.candidateRoutes && data.candidateRoutes.length > 0) {
-        setCandidateRoutes(data.candidateRoutes);
-        setRecommendedRoute(data.recommendedRoute);
-        setSelectedRouteId(data.recommendedRoute.id);
+      if (!data.candidateRoutes || data.candidateRoutes.length === 0) {
+        throw new Error('API returned empty candidate routes');
+      }
 
-        if (data.origin) {
-          setOriginCoord({
-            name: data.origin.name || origin,
-            lat: data.origin.lat || 26.9124,
-            lng: data.origin.lng || 75.7873
-          });
-        }
-        if (data.destination) {
-          setDestCoord({
-            name: data.destination.name || destination,
-            lat: data.destination.lat || 26.4499,
-            lng: data.destination.lng || 74.6399
-          });
-        }
+      setCandidateRoutes(data.candidateRoutes);
+      setRecommendedRoute(data.recommendedRoute);
+      setSelectedRouteId(data.recommendedRoute.id);
+
+      if (data.origin) {
+        setOriginCoord({
+          name: data.origin.name || origin,
+          lat: data.origin.lat || 26.9124,
+          lng: data.origin.lng || 75.7873
+        });
+      }
+      if (data.destination) {
+        setDestCoord({
+          name: data.destination.name || destination,
+          lat: data.destination.lat || 26.4499,
+          lng: data.destination.lng || 74.6399
+        });
       }
     } catch (err) {
-      console.error('Optimization error:', err);
+      console.warn('Backend API route optimization unavailable, using local client route engine:', err);
+      try {
+        const fallback = generateClientRoutes({
+          originName: origin,
+          destName: destination,
+          originCoord,
+          destCoord,
+          vehicleType,
+          routingMode
+        });
+
+        if (fallback.candidateRoutes && fallback.candidateRoutes.length > 0) {
+          setCandidateRoutes(fallback.candidateRoutes);
+          setRecommendedRoute(fallback.recommendedRoute);
+          setSelectedRouteId(fallback.recommendedRoute.id);
+
+          if (fallback.origin) {
+            setOriginCoord(fallback.origin);
+          }
+          if (fallback.destination) {
+            setDestCoord(fallback.destination);
+          }
+        }
+      } catch (clientErr) {
+        console.error('Client route engine error:', clientErr);
+      }
     } finally {
       setIsOptimizing(false);
       setOptimizationStep(0);

@@ -65,11 +65,25 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   onSelectPreset,
   selectedPresetId
 }) => {
+  // Helper to find state of a city name
+  const getStateForCity = (cityName: string): string => {
+    if (!cityName) return '';
+    const clean = cityName.trim().toLowerCase();
+    const exact = ALL_INDIAN_CITIES_FLAT.find(c => c.name.toLowerCase() === clean);
+    if (exact) return exact.state;
+    const partial = ALL_INDIAN_CITIES_FLAT.find(
+      c => clean.startsWith(c.name.toLowerCase()) || clean.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(clean)
+    );
+    return partial ? partial.state : '';
+  };
+
   // State selection for Origin & Destination
-  const [originState, setOriginState] = useState<string>('Delhi-NCR');
-  const [destState, setDestState] = useState<string>('Rajasthan');
+  const [originState, setOriginState] = useState<string>(() => getStateForCity(origin) || 'Rajasthan');
+  const [destState, setDestState] = useState<string>(() => getStateForCity(destination) || 'Rajasthan');
 
   // Search input & dropdown controls
+  const [originSearchText, setOriginSearchText] = useState<string>('');
+  const [destSearchText, setDestSearchText] = useState<string>('');
   const [showOriginDropdown, setShowOriginDropdown] = useState<boolean>(false);
   const [showDestDropdown, setShowDestDropdown] = useState<boolean>(false);
 
@@ -77,15 +91,6 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const destInputRef = useRef<HTMLInputElement>(null);
   const originDropdownRef = useRef<HTMLDivElement>(null);
   const destDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Helper to find state of a city name
-  const getStateForCity = (cityName: string): string => {
-    if (!cityName) return '';
-    const match = ALL_INDIAN_CITIES_FLAT.find(
-      c => c.name.toLowerCase() === cityName.toLowerCase()
-    );
-    return match ? match.state : '';
-  };
 
   // Sync state dropdown when origin/destination props change (e.g. from preset or initial load)
   useEffect(() => {
@@ -127,24 +132,30 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     ? (CITIES_BY_STATE as Record<string, Array<{ name: string; lat: number; lng: number; isCapital?: boolean }>>)[originState].map(c => ({ ...c, state: originState }))
     : ALL_INDIAN_CITIES_FLAT;
 
-  const filteredOriginCities = currentOriginStateCities.filter(c => {
-    if (!origin) return true;
-    return c.name.toLowerCase().includes(origin.toLowerCase());
-  });
-
   const quickOriginCities = currentOriginStateCities.slice(0, 6);
+
+  // Search results for typing across all India
+  const searchResultsOrigin = originSearchText.trim()
+    ? ALL_INDIAN_CITIES_FLAT.filter(c =>
+        c.name.toLowerCase().includes(originSearchText.toLowerCase()) ||
+        c.state.toLowerCase().includes(originSearchText.toLowerCase())
+      ).slice(0, 15)
+    : [];
 
   // Cities for destination based on destState
   const currentDestStateCities = destState && (CITIES_BY_STATE as Record<string, Array<{ name: string; lat: number; lng: number; isCapital?: boolean }>>)[destState]
     ? (CITIES_BY_STATE as Record<string, Array<{ name: string; lat: number; lng: number; isCapital?: boolean }>>)[destState].map(c => ({ ...c, state: destState }))
     : ALL_INDIAN_CITIES_FLAT;
 
-  const filteredDestCities = currentDestStateCities.filter(c => {
-    if (!destination) return true;
-    return c.name.toLowerCase().includes(destination.toLowerCase());
-  });
-
   const quickDestCities = currentDestStateCities.slice(0, 6);
+
+  // Search results for typing across all India
+  const searchResultsDest = destSearchText.trim()
+    ? ALL_INDIAN_CITIES_FLAT.filter(c =>
+        c.name.toLowerCase().includes(destSearchText.toLowerCase()) ||
+        c.state.toLowerCase().includes(destSearchText.toLowerCase())
+      ).slice(0, 15)
+    : [];
 
   const handleSelectOriginCity = (city: { name: string; lat: number; lng: number; state?: string }) => {
     setOrigin(city.name);
@@ -152,6 +163,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     if (city.state && city.state !== originState) {
       setOriginState(city.state);
     }
+    setOriginSearchText('');
     setShowOriginDropdown(false);
   };
 
@@ -161,6 +173,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     if (city.state && city.state !== destState) {
       setDestState(city.state);
     }
+    setDestSearchText('');
     setShowDestDropdown(false);
   };
 
@@ -251,7 +264,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           <button
             type="button"
             onClick={handleUseGps}
-            className="text-[10px] text-qblue hover:text-qnavy flex items-center space-x-1 font-semibold hover:underline"
+            className="text-[10px] text-qblue hover:text-qnavy flex items-center space-x-1 font-semibold hover:underline cursor-pointer"
             title="Use current GPS location"
           >
             <Crosshair className="w-3 h-3 text-qblue" />
@@ -271,16 +284,16 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               onChange={(e) => {
                 const newState = e.target.value;
                 setOriginState(newState);
-                const cities = (CITIES_BY_STATE as Record<string, Array<{ name: string; lat: number; lng: number }>>)[newState];
+                const cities = newState && (CITIES_BY_STATE as Record<string, Array<{ name: string; lat: number; lng: number; isCapital?: boolean }>>)[newState];
                 if (cities && cities.length > 0) {
-                  const defaultCity = cities[0];
+                  const defaultCity = cities.find(c => c.isCapital) || cities[0];
                   setOrigin(defaultCity.name);
                   setOriginCoord({ name: defaultCity.name, lat: defaultCity.lat, lng: defaultCity.lng });
                 }
               }}
-              className="w-full text-xs py-2 px-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl font-semibold text-text-main focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-soft-sm transition-smooth"
+              className="w-full text-xs py-2 px-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl font-semibold text-text-main focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-soft-sm transition-smooth cursor-pointer"
             >
-              <option value="">-- All India (Search Any City) --</option>
+              <option value="">-- All India (430+ Cities) --</option>
               {ALL_INDIAN_STATES.map(s => (
                 <option key={s} value={s}>
                   {s} {UT_NAMES.has(s) ? '(UT)' : ''}
@@ -289,108 +302,125 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             </select>
           </div>
 
-          {/* Step 2: Select / Search City */}
-          <div className="relative">
+          {/* Step 2: Select City Dropdown */}
+          <div>
             <label className="text-[9px] font-bold text-text-light uppercase tracking-wider block mb-1">
-              2. Select / Search City:
+              2. Select City ({currentOriginStateCities.length} available):
             </label>
-            <div className="relative flex items-center">
-              <input
-                ref={originInputRef}
-                type="text"
-                value={origin}
-                onChange={e => {
-                  setOrigin(e.target.value);
-                  setShowOriginDropdown(true);
-                }}
-                onFocus={() => setShowOriginDropdown(true)}
-                placeholder={originState ? `Choose city in ${originState}...` : 'Type city name...'}
-                className="w-full pl-3 pr-14 py-2 text-xs font-semibold text-text-main bg-white border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-soft-sm transition-smooth"
-              />
-              <div className="absolute right-1.5 flex items-center space-x-1">
-                {origin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOrigin('');
-                      setOriginCoord({ name: '', lat: 0, lng: 0 });
-                      originInputRef.current?.focus();
-                    }}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-smooth"
-                    title="Clear city"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowOriginDropdown(!showOriginDropdown)}
-                  className="p-1 text-slate-400 hover:text-qnavy rounded-full hover:bg-slate-100 transition-smooth"
-                >
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* City Dropdown List for Origin */}
-            {showOriginDropdown && (
-              <div
-                ref={originDropdownRef}
-                className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-56 overflow-y-auto divide-y divide-slate-100"
-              >
-                <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between items-center">
-                  <span>{originState ? `Cities in ${originState}` : 'All Indian Cities'}</span>
-                  <span className="text-[9px] text-text-light">{filteredOriginCities.length} found</span>
-                </div>
-                {filteredOriginCities.length > 0 ? (
-                  filteredOriginCities.map(city => (
-                    <div
-                      key={city.name}
-                      onClick={() => handleSelectOriginCity(city)}
-                      className="p-2.5 hover:bg-emerald-50/70 cursor-pointer transition-smooth flex items-center justify-between text-xs group"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-700 transition-smooth" />
-                        <span className="font-semibold text-text-main group-hover:text-emerald-900">{city.name}</span>
-                        {city.isCapital && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">
-                            Capital
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-text-light">{city.state || originState}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-center text-[11px] text-text-muted">
-                    No matching city found in {originState || 'India'}
-                  </div>
-                )}
-              </div>
-            )}
+            <select
+              value={origin}
+              onChange={(e) => {
+                const cityName = e.target.value;
+                const found = currentOriginStateCities.find(c => c.name === cityName) || ALL_INDIAN_CITIES_FLAT.find(c => c.name === cityName);
+                if (found) {
+                  handleSelectOriginCity(found);
+                } else if (cityName) {
+                  setOrigin(cityName);
+                }
+              }}
+              className="w-full text-xs py-2 px-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl font-semibold text-text-main focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-soft-sm transition-smooth cursor-pointer"
+            >
+              <option value="">-- Choose City in {originState || 'India'} --</option>
+              {origin && !currentOriginStateCities.some(c => c.name.toLowerCase() === origin.toLowerCase()) && (
+                <option value={origin}>{origin} (Selected)</option>
+              )}
+              {currentOriginStateCities.map(city => (
+                <option key={city.name} value={city.name}>
+                  {city.name} {city.isCapital ? '★ (Capital)' : ''}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
         {/* Quick Origin City Chips */}
         {quickOriginCities.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-slate-200/60">
+          <div className="flex flex-wrap items-center gap-1 pt-1 mb-2 border-t border-slate-200/60">
             <span className="text-[9px] text-text-light font-semibold self-center mr-1">Quick pick:</span>
             {quickOriginCities.map(city => (
               <button
                 key={city.name}
                 type="button"
                 onClick={() => handleSelectOriginCity(city)}
-                className={`text-[10px] px-2 py-0.5 rounded-lg border transition-smooth font-medium ${
+                className={`text-[10px] px-2 py-0.5 rounded-lg border transition-smooth font-medium cursor-pointer ${
                   origin === city.name
-                    ? 'bg-qnavy text-white border-qnavy shadow-soft-sm'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-soft-sm font-semibold'
                     : 'bg-white text-text-muted border-slate-200 hover:border-slate-300 hover:text-text-main'
                 }`}
               >
-                {city.name}
+                {city.name} {city.isCapital ? '★' : ''}
               </button>
             ))}
           </div>
         )}
+
+        {/* Search any city across India by typing */}
+        <div className="relative">
+          <div className="relative flex items-center">
+            <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+            <input
+              ref={originInputRef}
+              type="text"
+              value={originSearchText}
+              onChange={e => {
+                setOriginSearchText(e.target.value);
+                setShowOriginDropdown(true);
+              }}
+              onFocus={() => setShowOriginDropdown(true)}
+              placeholder="Or type to search across all 430+ Indian cities..."
+              className="w-full pl-8 pr-7 py-1.5 text-xs text-text-main bg-white border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 placeholder:text-slate-400 shadow-soft-sm transition-smooth"
+            />
+            {originSearchText && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOriginSearchText('');
+                  setShowOriginDropdown(false);
+                }}
+                className="absolute right-2 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {showOriginDropdown && originSearchText.trim().length > 0 && (
+            <div
+              ref={originDropdownRef}
+              className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-52 overflow-y-auto divide-y divide-slate-100"
+            >
+              <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between items-center">
+                <span>Search Results ({searchResultsOrigin.length})</span>
+                <span className="text-[9px] text-text-light">Select city & auto-switch state</span>
+              </div>
+              {searchResultsOrigin.length > 0 ? (
+                searchResultsOrigin.map(city => (
+                  <div
+                    key={`${city.state}-${city.name}`}
+                    onClick={() => handleSelectOriginCity(city)}
+                    className="p-2 hover:bg-emerald-50/70 cursor-pointer transition-smooth flex items-center justify-between text-xs group"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-700" />
+                      <span className="font-semibold text-text-main group-hover:text-emerald-900">{city.name}</span>
+                      {city.isCapital && (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">
+                          Capital
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-text-light font-medium">{city.state}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 text-center text-[11px] text-text-muted">
+                  No city found matching "{originSearchText}"
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Swap Button (⇄) */}
@@ -398,7 +428,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         <button
           type="button"
           onClick={handleSwap}
-          className="w-8 h-8 rounded-full bg-white border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-qnavy shadow-soft-sm flex items-center justify-center transition-all duration-200 active:rotate-180 active:scale-95"
+          className="w-8 h-8 rounded-full bg-white border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-qnavy shadow-soft-sm flex items-center justify-center transition-all duration-200 active:rotate-180 active:scale-95 cursor-pointer"
           title="Swap Origin and Destination"
         >
           <ArrowUpDown className="w-4 h-4" />
@@ -429,16 +459,16 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               onChange={(e) => {
                 const newState = e.target.value;
                 setDestState(newState);
-                const cities = (CITIES_BY_STATE as Record<string, Array<{ name: string; lat: number; lng: number }>>)[newState];
+                const cities = newState && (CITIES_BY_STATE as Record<string, Array<{ name: string; lat: number; lng: number; isCapital?: boolean }>>)[newState];
                 if (cities && cities.length > 0) {
-                  const defaultCity = cities[0];
+                  const defaultCity = cities.find(c => c.isCapital) || cities[0];
                   setDestination(defaultCity.name);
                   setDestCoord({ name: defaultCity.name, lat: defaultCity.lat, lng: defaultCity.lng });
                 }
               }}
-              className="w-full text-xs py-2 px-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-qnavy rounded-xl font-semibold text-text-main focus:outline-none focus:ring-2 focus:ring-qnavy/20 shadow-soft-sm transition-smooth"
+              className="w-full text-xs py-2 px-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-qnavy rounded-xl font-semibold text-text-main focus:outline-none focus:ring-2 focus:ring-qnavy/20 shadow-soft-sm transition-smooth cursor-pointer"
             >
-              <option value="">-- All India (Search Any City) --</option>
+              <option value="">-- All India (430+ Cities) --</option>
               {ALL_INDIAN_STATES.map(s => (
                 <option key={s} value={s}>
                   {s} {UT_NAMES.has(s) ? '(UT)' : ''}
@@ -447,108 +477,125 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             </select>
           </div>
 
-          {/* Step 2: Select / Search City */}
-          <div className="relative">
+          {/* Step 2: Select City Dropdown */}
+          <div>
             <label className="text-[9px] font-bold text-text-light uppercase tracking-wider block mb-1">
-              2. Select / Search City:
+              2. Select City ({currentDestStateCities.length} available):
             </label>
-            <div className="relative flex items-center">
-              <input
-                ref={destInputRef}
-                type="text"
-                value={destination}
-                onChange={e => {
-                  setDestination(e.target.value);
-                  setShowDestDropdown(true);
-                }}
-                onFocus={() => setShowDestDropdown(true)}
-                placeholder={destState ? `Choose city in ${destState}...` : 'Type city name...'}
-                className="w-full pl-3 pr-14 py-2 text-xs font-semibold text-text-main bg-white border border-slate-200 hover:border-slate-300 focus:border-qnavy rounded-xl focus:outline-none focus:ring-2 focus:ring-qnavy/20 shadow-soft-sm transition-smooth"
-              />
-              <div className="absolute right-1.5 flex items-center space-x-1">
-                {destination && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDestination('');
-                      setDestCoord({ name: '', lat: 0, lng: 0 });
-                      destInputRef.current?.focus();
-                    }}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-smooth"
-                    title="Clear destination"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowDestDropdown(!showDestDropdown)}
-                  className="p-1 text-slate-400 hover:text-qnavy rounded-full hover:bg-slate-100 transition-smooth"
-                >
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* City Dropdown List for Destination */}
-            {showDestDropdown && (
-              <div
-                ref={destDropdownRef}
-                className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-56 overflow-y-auto divide-y divide-slate-100"
-              >
-                <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between items-center">
-                  <span>{destState ? `Cities in ${destState}` : 'All Indian Cities'}</span>
-                  <span className="text-[9px] text-text-light">{filteredDestCities.length} found</span>
-                </div>
-                {filteredDestCities.length > 0 ? (
-                  filteredDestCities.map(city => (
-                    <div
-                      key={city.name}
-                      onClick={() => handleSelectDestCity(city)}
-                      className="p-2.5 hover:bg-blue-50/70 cursor-pointer transition-smooth flex items-center justify-between text-xs group"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-qnavy transition-smooth" />
-                        <span className="font-semibold text-text-main group-hover:text-qnavy">{city.name}</span>
-                        {city.isCapital && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">
-                            Capital
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-text-light">{city.state || destState}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-center text-[11px] text-text-muted">
-                    No matching city found in {destState || 'India'}
-                  </div>
-                )}
-              </div>
-            )}
+            <select
+              value={destination}
+              onChange={(e) => {
+                const cityName = e.target.value;
+                const found = currentDestStateCities.find(c => c.name === cityName) || ALL_INDIAN_CITIES_FLAT.find(c => c.name === cityName);
+                if (found) {
+                  handleSelectDestCity(found);
+                } else if (cityName) {
+                  setDestination(cityName);
+                }
+              }}
+              className="w-full text-xs py-2 px-2.5 bg-white border border-slate-200 hover:border-slate-300 focus:border-qnavy rounded-xl font-semibold text-text-main focus:outline-none focus:ring-2 focus:ring-qnavy/20 shadow-soft-sm transition-smooth cursor-pointer"
+            >
+              <option value="">-- Choose City in {destState || 'India'} --</option>
+              {destination && !currentDestStateCities.some(c => c.name.toLowerCase() === destination.toLowerCase()) && (
+                <option value={destination}>{destination} (Selected)</option>
+              )}
+              {currentDestStateCities.map(city => (
+                <option key={city.name} value={city.name}>
+                  {city.name} {city.isCapital ? '★ (Capital)' : ''}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
         {/* Quick Dest City Chips */}
         {quickDestCities.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-slate-200/60">
+          <div className="flex flex-wrap items-center gap-1 pt-1 mb-2 border-t border-slate-200/60">
             <span className="text-[9px] text-text-light font-semibold self-center mr-1">Quick pick:</span>
             {quickDestCities.map(city => (
               <button
                 key={city.name}
                 type="button"
                 onClick={() => handleSelectDestCity(city)}
-                className={`text-[10px] px-2 py-0.5 rounded-lg border transition-smooth font-medium ${
+                className={`text-[10px] px-2 py-0.5 rounded-lg border transition-smooth font-medium cursor-pointer ${
                   destination === city.name
-                    ? 'bg-qnavy text-white border-qnavy shadow-soft-sm'
+                    ? 'bg-qnavy text-white border-qnavy shadow-soft-sm font-semibold'
                     : 'bg-white text-text-muted border-slate-200 hover:border-slate-300 hover:text-text-main'
                 }`}
               >
-                {city.name}
+                {city.name} {city.isCapital ? '★' : ''}
               </button>
             ))}
           </div>
         )}
+
+        {/* Search any city across India by typing */}
+        <div className="relative">
+          <div className="relative flex items-center">
+            <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+            <input
+              ref={destInputRef}
+              type="text"
+              value={destSearchText}
+              onChange={e => {
+                setDestSearchText(e.target.value);
+                setShowDestDropdown(true);
+              }}
+              onFocus={() => setShowDestDropdown(true)}
+              placeholder="Or type to search across all 430+ Indian cities..."
+              className="w-full pl-8 pr-7 py-1.5 text-xs text-text-main bg-white border border-slate-200 hover:border-slate-300 focus:border-qnavy rounded-xl focus:outline-none focus:ring-2 focus:ring-qnavy/20 placeholder:text-slate-400 shadow-soft-sm transition-smooth"
+            />
+            {destSearchText && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDestSearchText('');
+                  setShowDestDropdown(false);
+                }}
+                className="absolute right-2 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {showDestDropdown && destSearchText.trim().length > 0 && (
+            <div
+              ref={destDropdownRef}
+              className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-52 overflow-y-auto divide-y divide-slate-100"
+            >
+              <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between items-center">
+                <span>Search Results ({searchResultsDest.length})</span>
+                <span className="text-[9px] text-text-light">Select city & auto-switch state</span>
+              </div>
+              {searchResultsDest.length > 0 ? (
+                searchResultsDest.map(city => (
+                  <div
+                    key={`${city.state}-${city.name}`}
+                    onClick={() => handleSelectDestCity(city)}
+                    className="p-2 hover:bg-blue-50/70 cursor-pointer transition-smooth flex items-center justify-between text-xs group"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-qnavy" />
+                      <span className="font-semibold text-text-main group-hover:text-qnavy">{city.name}</span>
+                      {city.isCapital && (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">
+                          Capital
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-text-light font-medium">{city.state}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 text-center text-[11px] text-text-muted">
+                  No city found matching "{destSearchText}"
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Popular Interstate Corridors */}

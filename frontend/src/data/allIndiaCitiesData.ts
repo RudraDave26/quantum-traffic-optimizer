@@ -571,3 +571,88 @@ export const ALL_INDIAN_CITIES_FLAT = Object.entries(CITIES_BY_STATE).flatMap(([
     displayName: `${c.name}, ${state}`
   }))
 );
+
+export const POPULAR_INDIAN_CORRIDORS = [
+  {
+    id: 'corridor-jaipur-ajmer',
+    name: 'Jaipur → Ajmer',
+    description: 'NH-48 Golden Quadrilateral vs Bagru-Naraina Expressway',
+    origin: { name: 'Jaipur (MI Road & Pink City)', lat: 26.9124, lng: 75.7873 },
+    destination: { name: 'Ajmer (Dargah Sharif / Station)', lat: 26.4499, lng: 74.6399 },
+    state: 'Rajasthan',
+    distanceKm: 132.4
+  },
+  {
+    id: 'corridor-delhi-gurgaon',
+    name: 'Delhi → Gurgaon Cyber City',
+    description: 'NH-48 Mahipalpur Choke vs Mehrauli-Gurgaon (MG) Road',
+    origin: { name: 'Connaught Place, New Delhi', lat: 28.6315, lng: 77.2167 },
+    destination: { name: 'DLF Cyber City, Gurugram', lat: 28.4950, lng: 77.0895 },
+    state: 'Delhi-NCR',
+    distanceKm: 28.4
+  },
+  {
+    id: 'corridor-mumbai-pune',
+    name: 'Mumbai → Pune Expressway',
+    description: 'Yashwantrao Chavan Expressway vs Old NH-48 Ghat Bypass',
+    origin: { name: 'Bandra West & BKC, Mumbai', lat: 19.0596, lng: 72.8295 },
+    destination: { name: 'Pune (Shivajinagar / FC Road)', lat: 18.5308, lng: 73.8475 },
+    state: 'Maharashtra',
+    distanceKm: 148.5
+  },
+  {
+    id: 'corridor-delhi-agra',
+    name: 'Delhi → Agra (Taj Corridor)',
+    description: 'Yamuna 6-Lane Expressway vs Old Mathura NH-19 Corridor',
+    origin: { name: 'India Gate / Kartavya Path', lat: 28.6129, lng: 77.2295 },
+    destination: { name: 'Agra (Taj Mahal & Yamuna Expressway)', lat: 27.1767, lng: 78.0081 },
+    state: 'Uttar Pradesh',
+    distanceKm: 215.0
+  },
+  {
+    id: 'corridor-bangalore-mysuru',
+    name: 'Bengaluru → Mysuru 10-Lane Expressway',
+    description: 'NH-275 Access-Controlled Expressway vs Kanakapura Bypass',
+    origin: { name: 'Bengaluru (MG Road / Vidhana Soudha)', lat: 12.9756, lng: 77.6066 },
+    destination: { name: 'Mysuru (Mysore Palace & Ring Road)', lat: 12.2958, lng: 76.6394 },
+    state: 'Karnataka',
+    distanceKm: 144.2
+  },
+  {
+    id: 'corridor-chennai-pondicherry',
+    name: 'Chennai → Puducherry (East Coast Road)',
+    description: 'ECR Scenic Coastal Highway vs OMR Tindivanam Bypass',
+    origin: { name: 'Chennai Central / Marina Beach', lat: 13.0827, lng: 80.2707 },
+    destination: { name: 'Puducherry (French Quarter & Promenade Beach)', lat: 11.9416, lng: 79.8083 },
+    state: 'Tamil Nadu',
+    distanceKm: 151.0
+  },
+  {
+    id: 'corridor-ahmedabad-vadodara',
+    name: 'Ahmedabad → Vadodara NE-1',
+    description: 'National Expressway 1 vs Old NH-64 Arterial',
+    origin: { name: 'Ahmedabad (SG Highway & Sabarmati Ashram)', lat: 23.0225, lng: 72.5714 },
+    destination: { name: 'Vadodara (Laxmi Vilas Palace & Alkapuri)', lat: 22.3072, lng: 73.1812 },
+    state: 'Gujarat',
+    distanceKm: 111.0
+  },
+  {
+    id: 'corridor-chandigarh-shimla',
+    name: 'Chandigarh → Shimla Himalayan Expressway',
+    description: 'Parwanoo Himalayan 4-Lane vs Kalka-Solan Ghat Section',
+    origin: { name: 'Chandigarh (Sector 17 & Sukhna Lake)', lat: 30.7333, lng: 76.7794 },
+    destination: { name: 'Shimla (Mall Road & Ridge)', lat: 31.1048, lng: 77.1734 },
+    state: 'Himachal Pradesh',
+    distanceKm: 113.8
+  },
+  {
+    id: 'corridor-kolkata-durgapur',
+    name: 'Kolkata → Durgapur Steel Corridor',
+    description: 'NH-19 Durgapur Expressway (4-Lane) vs Dankuni Arterial',
+    origin: { name: 'Kolkata (Park Street & Victoria Memorial)', lat: 22.5535, lng: 88.3512 },
+    destination: { name: 'Durgapur (Steel City / City Centre)', lat: 23.5204, lng: 87.3119 },
+    state: 'West Bengal',
+    distanceKm: 168.0
+  }
+];
+
