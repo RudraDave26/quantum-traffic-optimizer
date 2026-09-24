@@ -5,6 +5,21 @@
 
 ---
 
+## 🌐 Live Prototype & Universal Access Links
+
+The prototype is accessible from any device (Mobile phones, tablets, laptops, desktop PCs) across the public internet:
+
+| Deployment Type | Live URL | Features & Subsystems |
+| :--- | :--- | :--- |
+| 🚀 **Cloudflare Public Tunnel** | [https://trailer-promise-flying-sailing.trycloudflare.com/](https://trailer-promise-flying-sailing.trycloudflare.com/) | **Full Backend + Groq LPU AI Briefing + SQLite History + Dynamic Rerouting** |
+| ⚡ **Vercel Production App** | [https://quantum-traffic-optimizer.vercel.app/](https://quantum-traffic-optimizer.vercel.app/) | **High-Speed CDN Frontend + Integrated Pan-India Client Route Optimizer** |
+| 💻 **Local Development** | `http://localhost:5000/` | **Full Local Stack (Node.js Express + React TS)** |
+
+> [!TIP]
+> **Mobile & Universal Testing:** Open the **Cloudflare Public Tunnel link** above on any smartphone, tablet, or external computer. It automatically routes to the full backend with AI route briefing, live traffic simulation, and all 430+ Indian cities route planning.
+
+---
+
 ## 🌟 Executive Summary
 
 **Q-ROUTE** is a production-style, full-stack intelligent traffic navigation system designed to combat urban gridlock, reduce fuel consumption, and cut vehicular emissions. 
