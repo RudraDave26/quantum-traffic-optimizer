@@ -12,10 +12,12 @@ import {
   Building2,
   Globe2,
   Crosshair,
-  ChevronDown,
+  MapPin,
+  Search,
+  X,
   Check
 } from 'lucide-react';
-import type { VehicleType, RoutingMode, CorridorPreset, PlaceItem, IndianState } from '../types';
+import type { VehicleType, RoutingMode, CorridorPreset, PlaceItem } from '../types';
 
 interface RoutePlannerProps {
   origin: string;
@@ -58,58 +60,76 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   onSelectPreset,
   selectedPresetId
 }) => {
-  // All States & UTs from API
-  const [states, setStates] = useState<IndianState[]>([]);
-  
-  // State selection for Origin and Destination independently
-  const [originState, setOriginState] = useState<string>('Rajasthan');
-  const [destState, setDestState] = useState<string>('Rajasthan');
-
-  // Cities list loaded per state
-  const [originCities, setOriginCities] = useState<PlaceItem[]>([]);
-  const [destCities, setDestCities] = useState<PlaceItem[]>([]);
+  // 500+ Indian cities loaded from database
+  const [allPlaces, setAllPlaces] = useState<PlaceItem[]>([]);
+  const [, setLoadingPlaces] = useState<boolean>(false);
 
   // Search input & dropdown controls
   const [showOriginDropdown, setShowOriginDropdown] = useState<boolean>(false);
   const [showDestDropdown, setShowDestDropdown] = useState<boolean>(false);
-  const [isSearchingPlaces, setIsSearchingPlaces] = useState<boolean>(false);
 
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
   const originDropdownRef = useRef<HTMLDivElement>(null);
   const destDropdownRef = useRef<HTMLDivElement>(null);
 
-  // 1. Fetch States on mount
+  // Load all 500+ verified Indian cities on mount
   useEffect(() => {
-    fetch('/api/places/states')
+    setLoadingPlaces(true);
+    fetch('/api/places/cities')
       .then(res => res.json())
       .then(data => {
-        if (data.states) setStates(data.states);
+        if (data.cities && Array.isArray(data.cities)) {
+          setAllPlaces(data.cities);
+        }
       })
-      .catch(e => console.warn('States fetch:', e));
+      .catch(e => console.warn('Places fetch:', e))
+      .finally(() => setLoadingPlaces(false));
   }, []);
 
-  // 2. Fetch Origin Cities when originState changes
+  // Dynamic geocoding enrichment for custom typed origin if not found in top 500
   useEffect(() => {
-    const stateQuery = originState ? `?state=${encodeURIComponent(originState)}` : '';
-    fetch(`/api/places/cities${stateQuery}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.cities) setOriginCities(data.cities);
-      })
-      .catch(e => console.warn('Origin cities fetch:', e));
-  }, [originState]);
+    if (origin.trim().length >= 3 && !allPlaces.some(p => p.name.toLowerCase() === origin.trim().toLowerCase())) {
+      const timer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/places/search?q=${encodeURIComponent(origin.trim())}`);
+          const data = await res.json();
+          if (data.places && data.places.length > 0) {
+            setAllPlaces(prev => {
+              const existing = new Set(prev.map(p => p.name.toLowerCase()));
+              const novel = data.places.filter((p: PlaceItem) => !existing.has(p.name.toLowerCase()));
+              return novel.length > 0 ? [...novel, ...prev] : prev;
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 450);
+      return () => clearTimeout(timer);
+    }
+  }, [origin, allPlaces]);
 
-  // 3. Fetch Destination Cities when destState changes
+  // Dynamic geocoding enrichment for custom typed destination
   useEffect(() => {
-    const stateQuery = destState ? `?state=${encodeURIComponent(destState)}` : '';
-    fetch(`/api/places/cities${stateQuery}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.cities) setDestCities(data.cities);
-      })
-      .catch(e => console.warn('Dest cities fetch:', e));
-  }, [destState]);
+    if (destination.trim().length >= 3 && !allPlaces.some(p => p.name.toLowerCase() === destination.trim().toLowerCase())) {
+      const timer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/places/search?q=${encodeURIComponent(destination.trim())}`);
+          const data = await res.json();
+          if (data.places && data.places.length > 0) {
+            setAllPlaces(prev => {
+              const existing = new Set(prev.map(p => p.name.toLowerCase()));
+              const novel = data.places.filter((p: PlaceItem) => !existing.has(p.name.toLowerCase()));
+              return novel.length > 0 ? [...novel, ...prev] : prev;
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 450);
+      return () => clearTimeout(timer);
+    }
+  }, [destination, allPlaces]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -127,32 +147,50 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSelectOriginCity = (city: PlaceItem) => {
-    setOrigin(city.name);
-    setOriginCoord({ name: city.name, lat: city.lat, lng: city.lng });
-    if (city.state) setOriginState(city.state);
+  // Quick popular hubs across India
+  const POPULAR_HUBS = [
+    'Mumbai', 'Delhi', 'Bengaluru', 'Jaipur', 'Hyderabad', 
+    'Pune', 'Chennai', 'Kolkata', 'Ahmedabad', 'Agra', 'Chandigarh'
+  ];
+
+  // Smart filtering: starts with name -> contains name -> contains state
+  const getSuggestions = (query: string) => {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) {
+      return allPlaces
+        .filter(p => POPULAR_HUBS.includes(p.name))
+        .slice(0, 10);
+    }
+    const startsWithName = allPlaces.filter(p => p.name.toLowerCase().startsWith(q));
+    const containsName = allPlaces.filter(p => !p.name.toLowerCase().startsWith(q) && p.name.toLowerCase().includes(q));
+    const containsState = allPlaces.filter(p => !p.name.toLowerCase().includes(q) && p.state.toLowerCase().includes(q));
+    return [...startsWithName, ...containsName, ...containsState].slice(0, 15);
+  };
+
+  const originSuggestions = getSuggestions(origin);
+  const destSuggestions = getSuggestions(destination);
+
+  const handleSelectOrigin = (place: PlaceItem) => {
+    setOrigin(place.name);
+    setOriginCoord({ name: place.name, lat: place.lat, lng: place.lng });
     setShowOriginDropdown(false);
   };
 
-  const handleSelectDestCity = (city: PlaceItem) => {
-    setDestination(city.name);
-    setDestCoord({ name: city.name, lat: city.lat, lng: city.lng });
-    if (city.state) setDestState(city.state);
+  const handleSelectDest = (place: PlaceItem) => {
+    setDestination(place.name);
+    setDestCoord({ name: place.name, lat: place.lat, lng: place.lng });
     setShowDestDropdown(false);
   };
 
   const handleSwap = () => {
     const tempName = origin;
     const tempCoord = originCoord;
-    const tempState = originState;
 
     setOrigin(destination);
     setOriginCoord(destCoord);
-    setOriginState(destState);
 
     setDestination(tempName);
     setDestCoord(tempCoord);
-    setDestState(tempState);
   };
 
   const handleUseGps = () => {
@@ -163,25 +201,16 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           const lng = pos.coords.longitude;
           setOrigin('Current GPS Location');
           setOriginCoord({ name: 'Current GPS Location', lat, lng });
+          setShowOriginDropdown(false);
         },
         () => {
           setOrigin('Jaipur');
           setOriginCoord({ name: 'Jaipur', lat: 26.9124, lng: 75.7873 });
+          setShowOriginDropdown(false);
         }
       );
     }
   };
-
-  // Filter cities by search text
-  const filteredOriginCities = originCities.filter(c =>
-    c.name.toLowerCase().includes(origin.toLowerCase()) ||
-    c.state.toLowerCase().includes(origin.toLowerCase())
-  );
-
-  const filteredDestCities = destCities.filter(c =>
-    c.name.toLowerCase().includes(destination.toLowerCase()) ||
-    c.state.toLowerCase().includes(destination.toLowerCase())
-  );
 
   const steps = [
     'Fetching live traffic...',
@@ -216,7 +245,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-bold text-qnavy">Pan-India Route Planner</h2>
-            <p className="text-[11px] text-text-muted">Select states & cities across all 28 States & 8 UTs</p>
+            <p className="text-[11px] text-text-muted">Unified Pan-India search across all 28 States & 8 UTs</p>
           </div>
         </div>
 
@@ -226,269 +255,256 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         </span>
       </div>
 
-      {/* Origin: State & City Selection */}
-      <div className="p-3 rounded-2xl bg-slate-50/70 border border-slate-200/80 mb-3">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-[10px] font-bold text-qnavy uppercase tracking-wider flex items-center space-x-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-qgreen ring-4 ring-qgreen/20" />
-            <span>ORIGIN: State & City</span>
-          </label>
-          <button
-            type="button"
-            onClick={handleUseGps}
-            className="text-[10px] text-qblue hover:underline flex items-center space-x-1 font-medium"
-          >
-            <Crosshair className="w-3 h-3" />
-            <span>GPS Location</span>
-          </button>
-        </div>
-
-        {/* State Dropdown for Origin */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-          <div>
-            <label className="text-[9px] font-bold text-text-light uppercase tracking-wider block mb-0.5">
-              1. Select State / UT:
-            </label>
-            <select
-              value={originState}
-              onChange={(e) => {
-                setOriginState(e.target.value);
-                setOrigin(''); // clear city to let user select
-                setShowOriginDropdown(true);
-              }}
-              className="w-full text-xs py-1.5 px-2.5 bg-white border border-slate-200 rounded-xl font-medium text-text-main focus:outline-none focus:ring-2 focus:ring-qblue/40"
-            >
-              <option value="">-- All India (Search Any City) --</option>
-              {states.map(s => (
-                <option key={s.name} value={s.name}>
-                  {s.name}{s.isUT ? ' (UT)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* City Input & Dropdown for Origin */}
-          <div className="relative">
-            <label className="text-[9px] font-bold text-text-light uppercase tracking-wider block mb-0.5">
-              2. Select / Search City:
-            </label>
-            <div className="relative">
-              <input
-                ref={originInputRef}
-                type="text"
-                value={origin}
-                onChange={e => {
-                  setOrigin(e.target.value);
-                  setShowOriginDropdown(true);
-                }}
-                onFocus={() => setShowOriginDropdown(true)}
-                placeholder={originState ? `Choose city in ${originState}...` : 'Type city name...'}
-                className="w-full pl-3 pr-8 py-1.5 text-xs font-semibold text-text-main bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-qblue/40"
-              />
-              <button
-                type="button"
-                onClick={() => setShowOriginDropdown(!showOriginDropdown)}
-                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-qnavy"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
+      {/* Google Maps Style Origin & Destination Unified Search Rail */}
+      <div className="relative bg-slate-50/80 border border-slate-200/90 rounded-2xl p-3 mb-4 shadow-soft-sm">
+        
+        {/* Main Search Inputs with Connected Rail */}
+        <div className="relative flex items-center">
+          
+          {/* Left Column: Visual Connected Rail (Green Origin dot -> Dotted line -> Navy Destination pin) */}
+          <div className="flex flex-col items-center justify-between self-stretch py-3 pr-2.5 pl-0.5">
+            {/* Origin Green Dot */}
+            <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 ring-4 ring-emerald-100 flex items-center justify-center flex-shrink-0" title="Origin">
+              <div className="w-1.5 h-1.5 rounded-full bg-white" />
             </div>
 
-            {/* City Dropdown List for Origin */}
-            {showOriginDropdown && (
-              <div
-                ref={originDropdownRef}
-                className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-52 overflow-y-auto divide-y divide-slate-100"
-              >
-                <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between">
-                  <span>{originState ? `Cities in ${originState}` : 'All Indian Cities'}</span>
-                  <span>{filteredOriginCities.length} found</span>
-                </div>
-                {filteredOriginCities.length > 0 ? (
-                  filteredOriginCities.map(city => (
-                    <div
-                      key={city.name}
-                      onClick={() => handleSelectOriginCity(city)}
-                      className="p-2 hover:bg-blue-50/70 cursor-pointer transition-smooth flex items-center justify-between text-xs"
+            {/* Dotted Vertical Connector Line */}
+            <div className="w-0 flex-1 border-l-2 border-dotted border-slate-300 my-1.5" />
+
+            {/* Destination Pin */}
+            <div className="w-3.5 h-3.5 rounded-full bg-qnavy ring-4 ring-slate-200 flex items-center justify-center flex-shrink-0" title="Destination">
+              <MapPin className="w-2.5 h-2.5 text-white" />
+            </div>
+          </div>
+
+          {/* Middle Column: Inputs for Origin & Destination */}
+          <div className="flex-1 space-y-2">
+            
+            {/* 1. Origin Input */}
+            <div className="relative">
+              <div className="relative flex items-center">
+                <input
+                  ref={originInputRef}
+                  type="text"
+                  value={origin}
+                  onChange={e => {
+                    setOrigin(e.target.value);
+                    setShowOriginDropdown(true);
+                  }}
+                  onFocus={() => setShowOriginDropdown(true)}
+                  placeholder="Choose starting point (e.g. Mumbai, Delhi, Jaipur)..."
+                  className="w-full pl-3 pr-16 py-2 text-xs font-semibold text-text-main bg-white border border-slate-200 hover:border-slate-300 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-smooth shadow-soft-sm"
+                />
+
+                <div className="absolute right-1.5 flex items-center space-x-1">
+                  {origin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOrigin('');
+                        setOriginCoord({ name: '', lat: 0, lng: 0 });
+                        originInputRef.current?.focus();
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-smooth"
+                      title="Clear origin"
                     >
-                      <div className="flex items-center space-x-2">
-                        <Building2 className="w-3 h-3 text-slate-400" />
-                        <span className="font-semibold text-text-main">{city.name}</span>
-                        {city.isCapital && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
-                            Capital
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleUseGps}
+                    className="p-1 text-qblue hover:text-qnavy rounded-full hover:bg-blue-50 transition-smooth"
+                    title="Use GPS current location"
+                  >
+                    <Crosshair className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Origin Autocomplete Dropdown */}
+              {showOriginDropdown && (
+                <div
+                  ref={originDropdownRef}
+                  className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-56 overflow-y-auto divide-y divide-slate-100"
+                >
+                  <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between items-center">
+                    <span className="flex items-center space-x-1">
+                      <Search className="w-3 h-3 text-slate-400" />
+                      <span>{origin ? `Matching "${origin}"` : 'Popular Starting Hubs'}</span>
+                    </span>
+                    <span className="text-[9px] text-text-light">{originSuggestions.length} places</span>
+                  </div>
+
+                  {originSuggestions.length > 0 ? (
+                    originSuggestions.map(place => (
+                      <div
+                        key={place.id || `${place.name}-${place.state}`}
+                        onClick={() => handleSelectOrigin(place)}
+                        className="p-2.5 hover:bg-emerald-50/60 cursor-pointer transition-smooth flex items-center justify-between text-xs group"
+                      >
+                        <div className="flex items-center space-x-2.5">
+                          <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center text-slate-500 group-hover:text-emerald-700 transition-smooth shrink-0">
+                            <Building2 className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <span className="font-semibold text-text-main group-hover:text-emerald-900 block leading-tight">
+                              {place.name}
+                            </span>
+                            <span className="text-[10px] text-text-light">{place.state}</span>
+                          </div>
+                        </div>
+
+                        {place.category && (
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                            place.category.includes('Capital')
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {place.category.includes('Capital') ? 'Capital' : place.state}
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-text-light">{city.state}</span>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-[11px] text-text-muted">
+                      No matching place found. Try typing another city or town name.
                     </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-center text-[11px] text-text-muted">
-                    No matching city found in {originState || 'India'}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Quick Origin City Chips */}
-        {originCities.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            <span className="text-[9px] text-text-light self-center mr-1">Quick pick:</span>
-            {originCities.slice(0, 6).map(city => (
-              <button
-                key={city.name}
-                type="button"
-                onClick={() => handleSelectOriginCity(city)}
-                className={`text-[10px] px-2 py-0.5 rounded-lg border transition-smooth ${
-                  origin === city.name
-                    ? 'bg-qnavy text-white border-qnavy font-semibold'
-                    : 'bg-white text-text-muted border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {city.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Swap Button (⇄) */}
-      <div className="flex justify-center -my-1 relative z-10">
-        <button
-          type="button"
-          onClick={handleSwap}
-          className="w-8 h-8 rounded-full bg-white border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-qnavy shadow-soft-sm flex items-center justify-center transition-smooth"
-          title="Swap Origin and Destination"
-        >
-          <ArrowUpDown className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* Destination: State & City Selection */}
-      <div className="p-3 rounded-2xl bg-slate-50/70 border border-slate-200/80 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-[10px] font-bold text-qnavy uppercase tracking-wider flex items-center space-x-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-qnavy ring-4 ring-qnavy/20" />
-            <span>DESTINATION: State & City</span>
-          </label>
-          <span className="text-[10px] text-text-light font-medium">
-            {destState || 'Any State'}
-          </span>
-        </div>
-
-        {/* State Dropdown for Destination */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-          <div>
-            <label className="text-[9px] font-bold text-text-light uppercase tracking-wider block mb-0.5">
-              1. Select State / UT:
-            </label>
-            <select
-              value={destState}
-              onChange={(e) => {
-                setDestState(e.target.value);
-                setDestination('');
-                setShowDestDropdown(true);
-              }}
-              className="w-full text-xs py-1.5 px-2.5 bg-white border border-slate-200 rounded-xl font-medium text-text-main focus:outline-none focus:ring-2 focus:ring-qblue/40"
-            >
-              <option value="">-- All India (Search Any City) --</option>
-              {states.map(s => (
-                <option key={s.name} value={s.name}>
-                  {s.name}{s.isUT ? ' (UT)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* City Input & Dropdown for Destination */}
-          <div className="relative">
-            <label className="text-[9px] font-bold text-text-light uppercase tracking-wider block mb-0.5">
-              2. Select / Search City:
-            </label>
-            <div className="relative">
-              <input
-                ref={destInputRef}
-                type="text"
-                value={destination}
-                onChange={e => {
-                  setDestination(e.target.value);
-                  setShowDestDropdown(true);
-                }}
-                onFocus={() => setShowDestDropdown(true)}
-                placeholder={destState ? `Choose city in ${destState}...` : 'Type city name...'}
-                className="w-full pl-3 pr-8 py-1.5 text-xs font-semibold text-text-main bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-qblue/40"
-              />
-              <button
-                type="button"
-                onClick={() => setShowDestDropdown(!showDestDropdown)}
-                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-qnavy"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* City Dropdown List for Destination */}
-            {showDestDropdown && (
-              <div
-                ref={destDropdownRef}
-                className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-52 overflow-y-auto divide-y divide-slate-100"
-              >
-                <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between">
-                  <span>{destState ? `Cities in ${destState}` : 'All Indian Cities'}</span>
-                  <span>{filteredDestCities.length} found</span>
-                </div>
-                {filteredDestCities.length > 0 ? (
-                  filteredDestCities.map(city => (
-                    <div
-                      key={city.name}
-                      onClick={() => handleSelectDestCity(city)}
-                      className="p-2 hover:bg-blue-50/70 cursor-pointer transition-smooth flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <Building2 className="w-3 h-3 text-slate-400" />
-                        <span className="font-semibold text-text-main">{city.name}</span>
-                        {city.isCapital && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
-                            Capital
+            {/* 2. Destination Input */}
+            <div className="relative">
+              <div className="relative flex items-center">
+                <input
+                  ref={destInputRef}
+                  type="text"
+                  value={destination}
+                  onChange={e => {
+                    setDestination(e.target.value);
+                    setShowDestDropdown(true);
+                  }}
+                  onFocus={() => setShowDestDropdown(true)}
+                  placeholder="Choose destination (e.g. Pune, Bengaluru, Agra)..."
+                  className="w-full pl-3 pr-9 py-2 text-xs font-semibold text-text-main bg-white border border-slate-200 hover:border-slate-300 focus:border-qnavy rounded-xl focus:outline-none focus:ring-2 focus:ring-qnavy/20 transition-smooth shadow-soft-sm"
+                />
+
+                {destination && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDestination('');
+                      setDestCoord({ name: '', lat: 0, lng: 0 });
+                      destInputRef.current?.focus();
+                    }}
+                    className="absolute right-2 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-smooth"
+                    title="Clear destination"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Destination Autocomplete Dropdown */}
+              {showDestDropdown && (
+                <div
+                  ref={destDropdownRef}
+                  className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-soft-lg max-h-56 overflow-y-auto divide-y divide-slate-100"
+                >
+                  <div className="p-2 bg-slate-50 text-[10px] font-bold text-text-muted flex justify-between items-center">
+                    <span className="flex items-center space-x-1">
+                      <Search className="w-3 h-3 text-slate-400" />
+                      <span>{destination ? `Matching "${destination}"` : 'Popular Destinations'}</span>
+                    </span>
+                    <span className="text-[9px] text-text-light">{destSuggestions.length} places</span>
+                  </div>
+
+                  {destSuggestions.length > 0 ? (
+                    destSuggestions.map(place => (
+                      <div
+                        key={place.id || `${place.name}-${place.state}`}
+                        onClick={() => handleSelectDest(place)}
+                        className="p-2.5 hover:bg-blue-50/70 cursor-pointer transition-smooth flex items-center justify-between text-xs group"
+                      >
+                        <div className="flex items-center space-x-2.5">
+                          <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center text-slate-500 group-hover:text-qnavy transition-smooth shrink-0">
+                            <MapPin className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <span className="font-semibold text-text-main group-hover:text-qnavy block leading-tight">
+                              {place.name}
+                            </span>
+                            <span className="text-[10px] text-text-light">{place.state}</span>
+                          </div>
+                        </div>
+
+                        {place.category && (
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                            place.category.includes('Capital')
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {place.category.includes('Capital') ? 'Capital' : place.state}
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-text-light">{city.state}</span>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-[11px] text-text-muted">
+                      No matching destination found. Try typing another city or town name.
                     </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-center text-[11px] text-text-muted">
-                    No matching city found in {destState || 'India'}
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
+
+          {/* Right Column: Swap Button */}
+          <div className="pl-2">
+            <button
+              type="button"
+              onClick={handleSwap}
+              className="w-8 h-8 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-500 hover:text-qnavy shadow-soft-sm flex items-center justify-center transition-all duration-200 active:scale-90"
+              title="Swap Origin and Destination"
+            >
+              <ArrowUpDown className="w-4 h-4" />
+            </button>
+          </div>
+
         </div>
 
-        {/* Quick Dest City Chips */}
-        {destCities.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            <span className="text-[9px] text-text-light self-center mr-1">Quick pick:</span>
-            {destCities.slice(0, 6).map(city => (
-              <button
-                key={city.name}
-                type="button"
-                onClick={() => handleSelectDestCity(city)}
-                className={`text-[10px] px-2 py-0.5 rounded-lg border transition-smooth ${
-                  destination === city.name
-                    ? 'bg-qnavy text-white border-qnavy font-semibold'
-                    : 'bg-white text-text-muted border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {city.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Quick Hub Chips */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2.5 mt-2 border-t border-slate-200/60">
+          <span className="text-[9.5px] font-bold text-text-light uppercase tracking-wider">Quick pick:</span>
+          {['Mumbai', 'Delhi', 'Jaipur', 'Pune', 'Bengaluru', 'Agra', 'Ahmedabad'].map(cityName => (
+            <button
+              key={cityName}
+              type="button"
+              onClick={() => {
+                const found = allPlaces.find(p => p.name.toLowerCase() === cityName.toLowerCase());
+                if (found) {
+                  if (!origin || (origin && destination)) {
+                    setDestination(found.name);
+                    setDestCoord({ name: found.name, lat: found.lat, lng: found.lng });
+                  } else {
+                    setDestination(found.name);
+                    setDestCoord({ name: found.name, lat: found.lat, lng: found.lng });
+                  }
+                }
+              }}
+              className={`text-[10px] px-2 py-0.5 rounded-lg border transition-smooth font-medium ${
+                destination === cityName || origin === cityName
+                  ? 'bg-qnavy text-white border-qnavy shadow-soft-sm'
+                  : 'bg-white text-text-muted border-slate-200 hover:border-slate-300 hover:text-text-main'
+              }`}
+            >
+              {cityName}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Popular Interstate Corridors */}

@@ -88,12 +88,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`🚀 Q-ROUTE Backend Server Running on http://localhost:${PORT}`);
-  console.log(`📡 Google Routes API Key: ${process.env.GOOGLE_ROUTES_API_KEY ? 'Configured' : 'Not Set (Using Demo Traffic Mode)'}`);
-  console.log(`⚡ Quantum-Inspired Classical Optimization Engine: READY`);
-  console.log(`=======================================================`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`🚀 Q-ROUTE Backend Server Running on http://localhost:${PORT}`);
+    console.log(`📡 Google Routes API Key: ${process.env.GOOGLE_ROUTES_API_KEY ? 'Configured' : 'Not Set (Using Demo Traffic Mode)'}`);
+    console.log(`⚡ Quantum-Inspired Classical Optimization Engine: READY`);
+    console.log(`=======================================================`);
+  });
+}
 
 export default app;

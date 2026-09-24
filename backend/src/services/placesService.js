@@ -55,6 +55,13 @@ export const placesService = {
   },
 
   /**
+   * Get all flat Indian cities
+   */
+  getAllCitiesFlat() {
+    return ALL_INDIAN_CITIES_FLAT;
+  },
+
+  /**
    * Get popular interstate demonstration corridors
    */
   getPopularCorridors() {

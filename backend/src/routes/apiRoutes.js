@@ -73,7 +73,7 @@ router.get('/places/cities', (req, res) => {
       return res.json({ success: true, state, cities, count: cities.length });
     }
     // Return all flat cities
-    const places = placesService.searchPlaces('');
+    const places = placesService.getAllCitiesFlat();
     res.json({ success: true, cities: places, count: places.length });
   } catch (err) {
     res.status(500).json({ error: err.message });

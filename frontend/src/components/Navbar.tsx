@@ -42,7 +42,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
-  const universalLink = 'https://handheld-portfolio-accounts-fred.trycloudflare.com';
+  const universalLink = typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+    ? window.location.origin
+    : 'https://trailer-promise-flying-sailing.trycloudflare.com';
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(universalLink);
