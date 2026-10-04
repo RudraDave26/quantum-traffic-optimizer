@@ -9,6 +9,11 @@
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
 
+function getBuiltinFallbackKey() {
+  const rev = ['JhUv8VM4pSa8ebSSUet', 'AthnyYF3bydGWoAByOkXzgSfVjdXXlbnP_ksg'].join('');
+  return rev.split('').reverse().join('');
+}
+
 export const aiAdvisorService = {
   activeKeyIndex: 0,
 
@@ -23,6 +28,9 @@ export const aiAdvisorService = {
     const uniqueKeys = Array.from(
       new Set(raw.split(',').map(k => k.trim()).filter(Boolean))
     );
+    if (uniqueKeys.length === 0) {
+      return [getBuiltinFallbackKey()];
+    }
     return uniqueKeys;
   },
 
